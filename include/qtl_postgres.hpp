@@ -27,8 +27,8 @@
 
 extern "C"
 {
-#include <c.h>
-#include <catalog/pg_type.h>
+// From PostGreSQL include folder:
+#include <server/catalog/pg_type_d.h>
 }
 
 
@@ -63,8 +63,6 @@ extern "C"
 
 #if defined(_WIN32) && _WIN32_WINNT < 0x0601
 
-#ifdef _M_IX86
-
 #define _WS2_32_WINSOCK_SWAP_LONGLONG(l)            \
     ( ( ((l) >> 56) & 0x00000000000000FFLL ) |       \
       ( ((l) >> 40) & 0x000000000000FF00LL ) |       \
@@ -91,8 +89,6 @@ __inline unsigned __int64 ntohll(unsigned __int64 Value)
 }
 
 #endif /* ntohll */
-
-#endif
 
 #endif
 
@@ -932,14 +928,14 @@ namespace qtl
             {
                 const ::interval* value = reinterpret_cast<const ::interval*>(data);
                 result.value->time = detail::ntoh(value->time);
-                result.value->month = detail::ntoh(value->month);
+                result.value->month = detail::ntoh((int32_t)value->month);
                 return data + sizeof(interval);
             }
             static std::pair<const char*, size_t> data(const interval& v, std::vector<char>& buffer)
             {
                 size_t n = buffer.size();
                 detail::push(buffer, v.value->time);
-                detail::push(buffer, v.value->month);
+                detail::push(buffer, (int32_t)v.value->month);
                 return std::make_pair(buffer.data() + n, buffer.size() - n);
             }
         };
@@ -950,13 +946,13 @@ namespace qtl
             static const char* get(value_type& result, const char* data, const char* end)
             {
                 result = *reinterpret_cast<const date*>(data);
-                result.value = detail::ntoh(result.value);
+                result.value = detail::ntoh((int32_t)result.value);
                 return data + sizeof(date);
             }
             static std::pair<const char*, size_t> data(const date& v, std::vector<char>& buffer)
             {
                 size_t n = buffer.size();
-                detail::push(buffer, v.value);
+                detail::push(buffer, (int32_t)v.value);
                 return std::make_pair(buffer.data() + n, buffer.size() - n);
             }
         };
@@ -1610,7 +1606,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 }
                 base_statement(const base_statement&) = delete;
                 base_statement(base_statement&& src)
-                    : m_conn(src.m_conn), m_binders(std::move(src.m_binders)), m_res(std::move(src.m_res)), _name(std::move(src._name))
+                    : m_conn(src.m_conn), m_res(std::move(src.m_res)), _name(std::move(src._name)), m_binders(std::move(src.m_binders))
                 {
                 }
                 base_statement& operator=(const base_statement&) = delete;
