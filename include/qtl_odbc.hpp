@@ -510,7 +510,7 @@ namespace qtl
                         SQLRETURN ret = SQLGetData(m_handle, static_cast<SQLUSMALLINT>(index + 1), SQL_C_BINARY, p.m_data, p.m_size, const_cast<SQLLEN*>(&p.m_indicator));
                         while (ret != SQL_NO_DATA)
                         {
-                            size_t n = (p.m_indicator > blob_buffer_size) || (p.m_indicator == SQL_NO_TOTAL) ?
+                            size_t n = (p.m_indicator > (SQLLEN)blob_buffer_size) || (p.m_indicator == SQL_NO_TOTAL) ?
                                        blob_buffer_size : p.m_indicator;
                             verify_error(ret);
                             v.write((const char*)p.m_data, n);
@@ -712,7 +712,7 @@ namespace qtl
                         SQLCHAR field_name[256] = {0};
                         SQLSMALLINT name_length = 0;
                         SQLSMALLINT data_type;
-                        SQLULEN column_size;
+                        SQLUINTEGER column_size;
                         SQLSMALLINT digits;
                         SQLSMALLINT nullable;
                         verify_error(SQLDescribeColA(m_handle, i, field_name, sizeof(field_name), &name_length,
@@ -937,6 +937,7 @@ namespace qtl
                 }
                 void set_attribute(SQLINTEGER attr, SQLINTEGER value)
                 {
+                    // Weird, but seems to be OK that the value is casted to a pointer
                     verify_error(SQLSetConnectAttrA(m_handle, attr, (SQLPOINTER)value, SQL_IS_INTEGER));
                 }
                 void set_attribute(SQLINTEGER attr, SQLUINTEGER value)
@@ -1273,6 +1274,7 @@ namespace qtl
                 struct tm tm;
                 tv.tv_sec = as_tm(tm);
                 tv.tv_usec = fraction / 1000;
+                return tv;
             }
         };
 

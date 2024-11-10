@@ -982,7 +982,7 @@ namespace qtl
         {
             static const char* get(qtl::blob_data& value, const char* data, const char* end)
             {
-                if (value.size < end - data)
+                if ((int64_t)value.size < end - data)
                     throw std::out_of_range("no enough buffer to receive blob data.");
                 memcpy(value.data, data, end - data);
                 return end;
@@ -1029,7 +1029,7 @@ namespace qtl
             typedef typename base_object_traits<std::vector<T>, id>::value_type value_type;
             static const char* get(value_type& result, const char* data, const char* end)
             {
-                if (end - data < sizeof(array_header))
+                if (end - data < (int64_t)sizeof(array_header))
                     throw std::overflow_error("insufficient data left in message");
 
                 array_header header = *reinterpret_cast<const array_header*>(data);

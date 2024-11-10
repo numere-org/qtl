@@ -453,7 +453,35 @@ namespace qtl
 
                 MYSQL_RES* result()
                 {
+                    if (!m_result)
+                        m_result = mysql_stmt_result_metadata(m_stmt);
+
                     return m_result;
+                }
+
+                const char* get_column_name(size_t index)
+                {
+                    if (!m_result)
+                        m_result = mysql_stmt_result_metadata(m_stmt);
+
+                    return mysql_fetch_field_direct(m_result, index)->name;
+                }
+
+                enum_field_types get_column_type(size_t index)
+                {
+                    if (!m_result)
+                        m_result = mysql_stmt_result_metadata(m_stmt);
+
+                    return mysql_fetch_field_direct(m_result, index)->type;
+                }
+
+                bool blob_is_text(size_t index)
+                {
+                    if (!m_result)
+                        m_result = mysql_stmt_result_metadata(m_stmt);
+
+                    // According to MySQL documentation https://dev.mysql.com/doc/c-api/8.0/en/c-api-data-structures.html
+                    return mysql_fetch_field_direct(m_result, index)->charsetnr != 63;
                 }
 
                 void bind_param(size_t index, const char* param, size_t length)
@@ -503,6 +531,110 @@ namespace qtl
                 {
                     bind(m_binders[index], param);
                 }
+
+#ifdef _QTL_ENABLE_CPP17
+
+                template<typename T>
+                inline void bind_field(size_t index, std::optional<T>&& value)
+                {
+                    if (m_result)
+                    {
+                        qtl::bind_field(*this, index, *value);
+                        binder_addin& addin = m_binderAddins[index];
+                        auto fetch_fun = addin.m_after_fetch;
+                        addin.m_after_fetch = [&addin, fetch_fun, &value](const binder & b)
+                        {
+                            if (fetch_fun) fetch_fun(b);
+                            if (*b.is_null) value.reset();
+                        };
+                    }
+                }
+
+                inline void bind_field_any(size_t index, std::any& value)
+                {
+                    if (m_result)
+                    {
+                        MYSQL_FIELD* field = mysql_fetch_field_direct(m_result, (unsigned int)index);
+                        if (field == nullptr) throw_exception();
+                        switch (field->type)
+                        {
+                            case MYSQL_TYPE_NULL:
+                                value.reset();
+                                break;
+                            case MYSQL_TYPE_BIT:
+                                value.emplace<bool>();
+                                bind_field(index, std::any_cast<bool&>(value));
+                                break;
+                            case MYSQL_TYPE_YEAR:
+                            case MYSQL_TYPE_TINY:
+                                value.emplace<int8_t>();
+                                bind_field(index, std::any_cast<int8_t&>(value));
+                                break;
+                            case MYSQL_TYPE_SHORT:
+                                value.emplace<int16_t>();
+                                bind_field(index, std::any_cast<int16_t&>(value));
+                                break;
+                            case MYSQL_TYPE_INT24:
+                            case MYSQL_TYPE_LONG:
+                                value.emplace<int32_t>();
+                                bind_field(index, std::any_cast<int32_t&>(value));
+                                break;
+                            case MYSQL_TYPE_LONGLONG:
+                                value.emplace<int64_t>();
+                                bind_field(index, std::any_cast<int64_t&>(value));
+                                break;
+                            case MYSQL_TYPE_FLOAT:
+                                value.emplace<float>();
+                                bind_field(index, std::any_cast<float&>(value));
+                                break;
+                            case MYSQL_TYPE_DOUBLE:
+                                value.emplace<double>();
+                                bind_field(index, std::any_cast<double&>(value));
+                                break;
+                            case MYSQL_TYPE_DATE:
+                            case MYSQL_TYPE_TIME:
+                            case MYSQL_TYPE_DATETIME:
+                            case MYSQL_TYPE_TIMESTAMP:
+                            case MYSQL_TYPE_TIMESTAMP2:
+                            case MYSQL_TYPE_DATETIME2:
+                            case MYSQL_TYPE_TIME2:
+                                value.emplace<qtl::mysql::time>();
+                                bind_field(index, std::any_cast<qtl::mysql::time&>(value));
+                                break;
+                            case MYSQL_TYPE_VARCHAR:
+                            case MYSQL_TYPE_VAR_STRING:
+                            case MYSQL_TYPE_STRING:
+                            case MYSQL_TYPE_ENUM:
+#if LIBMYSQL_VERSION_ID >= 50700
+                            case MYSQL_TYPE_JSON:
+#endif
+                            case MYSQL_TYPE_DECIMAL:
+                            case MYSQL_TYPE_NEWDECIMAL:
+                            case MYSQL_TYPE_GEOMETRY:
+                                value.emplace<std::string>();
+                                bind_field(index, qtl::bind_string(std::any_cast<std::string&>(value)));
+                                break;
+                            case MYSQL_TYPE_TINY_BLOB:
+                            case MYSQL_TYPE_MEDIUM_BLOB:
+                            case MYSQL_TYPE_BLOB:
+                            case MYSQL_TYPE_LONG_BLOB:
+                                value.emplace<blobbuf>();
+                                bind_field(index, std::forward<blobbuf>(std::any_cast<blobbuf&>(value)));
+                                break;
+                            default:
+                                throw mysql::error(CR_UNSUPPORTED_PARAM_TYPE, "Unsupported field type");
+                        }
+                        binder_addin& addin = m_binderAddins[index];
+                        auto fetch_fun = addin.m_after_fetch;
+                        addin.m_after_fetch = [&addin, fetch_fun, &value](const binder & b)
+                        {
+                            if (fetch_fun) fetch_fun(b);
+                            if (*b.is_null) value.reset();
+                        };
+                    }
+                }
+
+#endif // C++17
 
                 template<class Type>
                 void bind_field(size_t index, Type&& value)
@@ -626,107 +758,7 @@ namespace qtl
                     }
                 }
 
-#ifdef _QTL_ENABLE_CPP17
 
-                template<typename T>
-                inline void bind_field(size_t index, std::optional<T>&& value)
-                {
-                    if (m_result)
-                    {
-                        qtl::bind_field(*this, index, *value);
-                        binder_addin& addin = m_binderAddins[index];
-                        auto fetch_fun = addin.m_after_fetch;
-                        addin.m_after_fetch = [&addin, fetch_fun, &value](const binder & b)
-                        {
-                            if (fetch_fun) fetch_fun(b);
-                            if (*b.is_null) value.reset();
-                        };
-                    }
-                }
-
-                inline void bind_field(size_t index, std::any&& value)
-                {
-                    if (m_result)
-                    {
-                        MYSQL_FIELD* field = mysql_fetch_field_direct(m_result, (unsigned int)index);
-                        if (field == nullptr) throw_exception();
-                        switch (field->type)
-                        {
-                            case MYSQL_TYPE_NULL:
-                                value.reset();
-                                break;
-                            case MYSQL_TYPE_BIT:
-                                value.emplace<bool>();
-                                bind_field(index, std::any_cast<bool&>(value));
-                                break;
-                            case MYSQL_TYPE_TINY:
-                                value.emplace<int8_t>();
-                                bind_field(index, std::any_cast<int8_t&>(value));
-                                break;
-                            case MYSQL_TYPE_SHORT:
-                                value.emplace<int16_t>();
-                                bind_field(index, std::any_cast<int16_t&>(value));
-                                break;
-                            case MYSQL_TYPE_LONG:
-                                value.emplace<int32_t>();
-                                bind_field(index, std::any_cast<int32_t&>(value));
-                                break;
-                            case MYSQL_TYPE_LONGLONG:
-                                value.emplace<int64_t>();
-                                bind_field(index, std::any_cast<int64_t&>(value));
-                                break;
-                            case MYSQL_TYPE_FLOAT:
-                                value.emplace<float>();
-                                bind_field(index, std::any_cast<float&>(value));
-                                break;
-                            case MYSQL_TYPE_DOUBLE:
-                                value.emplace<double>();
-                                bind_field(index, std::any_cast<double&>(value));
-                                break;
-                            case MYSQL_TYPE_DATE:
-                            case MYSQL_TYPE_TIME:
-                            case MYSQL_TYPE_DATETIME:
-                            case MYSQL_TYPE_TIMESTAMP:
-                            case MYSQL_TYPE_TIMESTAMP2:
-                            case MYSQL_TYPE_DATETIME2:
-                            case MYSQL_TYPE_TIME2:
-                                value.emplace<qtl::mysql::time>();
-                                bind_field(index, std::any_cast<qtl::mysql::time&>(value));
-                                break;
-                            case MYSQL_TYPE_VARCHAR:
-                            case MYSQL_TYPE_VAR_STRING:
-                            case MYSQL_TYPE_STRING:
-                            case MYSQL_TYPE_ENUM:
-#if LIBMYSQL_VERSION_ID >= 50700
-                            case MYSQL_TYPE_JSON:
-#endif
-                            case MYSQL_TYPE_DECIMAL:
-                            case MYSQL_TYPE_NEWDECIMAL:
-                            case MYSQL_TYPE_GEOMETRY:
-                                value.emplace<std::string>();
-                                bind_field(index, qtl::bind_string(std::any_cast<std::string&>(value)));
-                                break;
-                            case MYSQL_TYPE_TINY_BLOB:
-                            case MYSQL_TYPE_MEDIUM_BLOB:
-                            case MYSQL_TYPE_BLOB:
-                            case MYSQL_TYPE_LONG_BLOB:
-                                value.emplace<blobbuf>();
-                                bind_field(index, std::forward<blobbuf>(std::any_cast<blobbuf&>(value)));
-                                break;
-                            default:
-                                throw mysql::error(CR_UNSUPPORTED_PARAM_TYPE, "Unsupported field type");
-                        }
-                        binder_addin& addin = m_binderAddins[index];
-                        auto fetch_fun = addin.m_after_fetch;
-                        addin.m_after_fetch = [&addin, fetch_fun, &value](const binder & b)
-                        {
-                            if (fetch_fun) fetch_fun(b);
-                            if (*b.is_null) value.reset();
-                        };
-                    }
-                }
-
-#endif // C++17
 
                 void close()
                 {
@@ -855,6 +887,41 @@ namespace qtl
                     });
                 }
 
+#ifdef _QTL_ENABLE_CPP17
+                // To be run after the call to execute()
+                bool auto_bind_fetch()
+                {
+                    if (!m_result)
+                        m_result = mysql_stmt_result_metadata(m_stmt);
+
+                    size_t numFields = mysql_stmt_field_count(m_stmt);
+
+                    if (numFields)
+                    {
+                        resize_binders(numFields);
+                        m_binderBuffer.resize(numFields);
+
+                        for (size_t i = 0; i < numFields; i++)
+                            bind_field_any(i, m_binderBuffer[i]);
+
+                        set_binders();
+                        if (mysql_stmt_bind_result(m_stmt, m_binders.data()) != 0)
+                                throw_exception();
+                    }
+
+
+                    return fetch();
+                }
+
+                std::any& get_value(size_t index)
+                {
+                    if (index >= m_binderBuffer.size())
+                        throw std::out_of_range("Field does not exist or has not been bound.");
+
+                    return m_binderBuffer[index];
+                }
+#endif
+
                 template<typename Types>
                 bool fetch(Types&& values)
                 {
@@ -920,6 +987,10 @@ namespace qtl
                 {
                     return mysql_stmt_reset(m_stmt) != 0;
                 }
+#ifdef _QTL_ENABLE_CPP17
+            private:
+                std::vector<std::any> m_binderBuffer;
+#endif
         };
 
         /*
@@ -1189,10 +1260,9 @@ namespace qtl
                     simple_execute(query, length);
 
                     unsigned int fieldCount = mysql_field_count(m_mysql);
-                    MYSQL_RES* result = mysql_store_result(m_mysql);
-                    if (fieldCount > 0 && result)
+                    MYSQL_RES* result = nullptr;
+                    if (fieldCount > 0 && (result = mysql_store_result(m_mysql)))
                     {
-                        MYSQL_RES* result = mysql_store_result(m_mysql);
                         MYSQL_ROW row;
                         while (row = mysql_fetch_row(result))
                         {
