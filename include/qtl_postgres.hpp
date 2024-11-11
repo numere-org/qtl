@@ -1509,6 +1509,11 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                         return 0LL;
                 }
 
+                int64_t get_row_count() const
+                {
+                    return PQntuples(m_res);
+                }
+
                 unsigned int get_column_count() const
                 {
                     return PQnfields(m_res);
