@@ -1,8 +1,8 @@
 #ifndef _QTL_MYSQL_H_
 #define _QTL_MYSQL_H_
 
-#include <mysql.h>
-#include <errmsg.h>
+#include <mysql/mysql.h>
+#include <mysql/errmsg.h>
 
 #include <time.h>
 #include <memory.h>

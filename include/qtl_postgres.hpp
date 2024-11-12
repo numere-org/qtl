@@ -17,18 +17,18 @@
 
 #define FRONTEND
 
-#include <libpq-fe.h>
-#include <libpq/libpq-fs.h>
-#include <pgtypes_error.h>
-#include <pgtypes_interval.h>
-#include <pgtypes_timestamp.h>
-#include <pgtypes_numeric.h>
-#include <pgtypes_date.h>
+#include <postgres/libpq-fe.h>
+#include <postgres/libpq/libpq-fs.h>
+#include <postgres/pgtypes_error.h>
+#include <postgres/pgtypes_interval.h>
+#include <postgres/pgtypes_timestamp.h>
+#include <postgres/pgtypes_numeric.h>
+#include <postgres/pgtypes_date.h>
 
 extern "C"
 {
 // From PostGreSQL include folder:
-#include <server/catalog/pg_type_d.h>
+#include <postgres/server/catalog/pg_type_d.h>
 }
 
 
