@@ -1089,8 +1089,8 @@ namespace qtl
                     m_mysql = src.m_mysql;
                     src.m_mysql = nullptr;
                 }
-                basic_database& operator==(const basic_database&) = delete;
-                basic_database& operator==(basic_database&& src)
+                basic_database& operator=(const basic_database&) = delete;
+                basic_database& operator=(basic_database&& src)
                 {
                     if (this != &src)
                     {

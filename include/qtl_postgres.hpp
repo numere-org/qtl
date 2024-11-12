@@ -61,7 +61,7 @@ extern "C"
 #undef unlink
 #endif
 
-#if defined(_WIN32) && _WIN32_WINNT < 0x0601
+#if defined(_WIN32) && _WIN32_WINNT <= 0x0601
 
 #define _WS2_32_WINSOCK_SWAP_LONGLONG(l)            \
     ( ( ((l) >> 56) & 0x00000000000000FFLL ) |       \
