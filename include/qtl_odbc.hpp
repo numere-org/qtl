@@ -163,6 +163,12 @@ namespace qtl
                 }
         };
 
+        struct driver
+        {
+            std::string description;
+            std::string attributes;
+        };
+
         class environment final : public object<SQL_HANDLE_ENV>
         {
             public:
@@ -182,6 +188,47 @@ namespace qtl
                     int32_t ver = 0;
                     verify_error(SQLGetEnvAttr(m_handle, SQL_ATTR_ODBC_VERSION, &ver, sizeof(DWORD), NULL));
                     return ver;
+                }
+
+                std::vector<driver> drivers()
+                {
+                    std::vector<driver> drivers;
+
+                    SQLSMALLINT descLen;
+                    SQLSMALLINT attrLen;
+                    SQLRETURN ret = SQLDriversA(m_handle, SQL_FETCH_FIRST,
+                                                nullptr, 0, &descLen,
+                                                nullptr, 0, &attrLen);
+
+                    // Prepare the needed buffers
+                    while (ret != SQL_NO_DATA)
+                    {
+                        driver drvr;
+                        drvr.description.resize(descLen+1);
+                        drvr.attributes.resize(attrLen+1);
+
+                        drivers.push_back(drvr);
+
+                        ret = SQLDriversA(m_handle, SQL_FETCH_NEXT,
+                                          nullptr, 0, &descLen,
+                                          nullptr, 0, &attrLen);
+                    }
+
+                    // Fill the buffers
+                    for (size_t i = 0; i < drivers.size(); i++)
+                    {
+                        ret = SQLDriversA(m_handle, SQL_FETCH_NEXT,
+                                          (SQLCHAR*)drivers[i].description.data(), drivers[i].description.length()+1, &descLen,
+                                          (SQLCHAR*)drivers[i].attributes.data(), drivers[i].attributes.length()+1, &attrLen);
+
+                        for (size_t j = 0; j < drivers[i].attributes.length()-1; j++)
+                        {
+                            if (!drivers[i].attributes[j])
+                                drivers[i].attributes[j] = '\n';
+                        }
+                    }
+
+                    return drivers;
                 }
         };
 
@@ -475,7 +522,7 @@ namespace qtl
                 {
                     SQLLEN length = 0;
                     verify_error(SQLColAttribute(m_handle, static_cast<SQLUSMALLINT>(index + 1), SQL_DESC_LENGTH, NULL, 0, NULL, &length));
-                    typename qtl::bind_string_helper<T>::char_type* data = v.alloc(length);
+                    typename qtl::bind_string_helper<T>::char_type* data = v.alloc(length+1);
                     bind_field(index, data, length + 1);
                     m_params[index].m_after_fetch = [v](const param_data & p) mutable
                     {
@@ -570,7 +617,7 @@ namespace qtl
                     };
                 }
 
-                void bind_field(size_t index, std::any&& value)
+                void bind_field_any(size_t index, std::any& value)
                 {
                     SQLLEN type = 0, isUnsigned = SQL_FALSE;
                     verify_error(SQLColAttribute(m_handle, index + 1, SQL_DESC_TYPE, NULL, 0, NULL, &type));
@@ -653,7 +700,7 @@ namespace qtl
                             value.emplace<SQL_TIMESTAMP_STRUCT>();
                             bind_field(index, std::forward<SQL_TIMESTAMP_STRUCT>(std::any_cast<SQL_TIMESTAMP_STRUCT&>(value)));
                             break;
-                        case SQL_INTERVAL_MONTH:
+                        /*case SQL_INTERVAL_MONTH:
                         case SQL_INTERVAL_YEAR:
                         case SQL_INTERVAL_YEAR_TO_MONTH:
                         case SQL_INTERVAL_DAY:
@@ -668,8 +715,10 @@ namespace qtl
                         case SQL_INTERVAL_MINUTE_TO_SECOND:
                             value.emplace<SQL_INTERVAL_STRUCT>();
                             bind_field(index, std::forward<SQL_INTERVAL_STRUCT>(std::any_cast<SQL_INTERVAL_STRUCT&>(value)));
-                            break;
+                            break;*/
                         case SQL_CHAR:
+                        case SQL_VARCHAR:
+                        case SQL_LONGVARCHAR:
                             value.emplace<std::string>();
                             bind_field(index, qtl::bind_string(std::any_cast<std::string&>(value)));
                             break;
@@ -703,6 +752,34 @@ namespace qtl
                     return count;
                 }
 
+                SQLSMALLINT get_column_count() const
+                {
+                    SQLSMALLINT count = 0;
+                    verify_error(SQLNumResultCols(m_handle, &count));
+                    return count;
+                }
+
+                std::string get_column_name(SQLUSMALLINT i) const
+                {
+                    SQLCHAR field_name[256] = {0};
+                    SQLSMALLINT name_length = 0;
+                    SQLSMALLINT data_type;
+                    SQLUINTEGER column_size;
+                    SQLSMALLINT digits;
+                    SQLSMALLINT nullable;
+                    verify_error(SQLDescribeColA(m_handle, i+1, field_name, sizeof(field_name), &name_length,
+                                                 &data_type, &column_size, &digits, &nullable));
+
+                    return (const char*)field_name;
+                }
+
+                SQLLEN get_column_type(SQLUSMALLINT i) const
+                {
+                    SQLLEN type = 0;
+                    verify_error(SQLColAttribute(m_handle, i + 1, SQL_DESC_TYPE, NULL, 0, NULL, &type));
+                    return type;
+                }
+
                 size_t find_field(const char* name) const
                 {
                     SQLSMALLINT count = 0;
@@ -726,6 +803,56 @@ namespace qtl
                 void reset()
                 {
                     verify_error(SQLFreeStmt(m_handle, SQL_RESET_PARAMS));
+                }
+
+                template<typename T, SQLSMALLINT C>
+                T get_value(SQLUSMALLINT index) const
+                {
+                    T val;
+                    SQLGetData(m_handle, index+1, C, (SQLPOINTER)&val, sizeof(T), nullptr);
+                    return val;
+                }
+
+                std::string get_str_value(SQLUSMALLINT index) const
+                {
+                    std::string buf(256, ' ');
+                    SQLLEN len = 0;
+                    SQLGetData(m_handle, index+1, SQL_C_CHAR, (SQLPOINTER)buf.data(), buf.length(), &len);
+
+                    // Get the rest of the string
+                    if (len >= (int64_t)buf.length())
+                    {
+                        size_t p = buf.length()-1;
+                        buf.resize(len+1);
+                        SQLGetData(m_handle, index+1, SQL_C_CHAR, (SQLPOINTER)(buf.data()+p), buf.length()-p, &len);
+                    }
+                    else if (len >= 0)
+                        buf.resize(len);
+                    else
+                        buf = "NULL";
+
+                    return buf;
+                }
+
+                std::wstring get_wstr_value(SQLUSMALLINT index) const
+                {
+                    std::wstring buf(256, ' ');
+                    SQLLEN len = 0;
+                    SQLGetData(m_handle, index+1, SQL_C_WCHAR, (SQLPOINTER)buf.data(), buf.length()*sizeof(wchar_t), &len);
+
+                    // Get the rest of the string
+                    if (len >= 0 && len/sizeof(wchar_t) >= (int64_t)buf.length())
+                    {
+                        size_t p = buf.length()-1;
+                        buf.resize(len/sizeof(wchar_t)+1);
+                        SQLGetData(m_handle, index+1, SQL_C_WCHAR, (SQLPOINTER)(buf.data()+p), (buf.length()-p)*sizeof(wchar_t), &len);
+                    }
+                    else if (len >= 0)
+                        buf.resize(len/sizeof(wchar_t));
+                    else
+                        buf = L"NULL";
+
+                    return buf;
                 }
 
                 /*
@@ -781,6 +908,11 @@ namespace qtl
                     open(query_text.data(), query_text.size());
                 }
 
+                void execute()
+                {
+                    SQLRETURN ret = SQLExecute(m_handle);
+                    verify_error(ret);
+                }
 
                 template<typename Types>
                 void execute(const Types& params)
