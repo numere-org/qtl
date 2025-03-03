@@ -628,8 +628,11 @@ namespace qtl
                         auto fetch_fun = addin.m_after_fetch;
                         addin.m_after_fetch = [&addin, fetch_fun, &value](const binder & b)
                         {
-                            if (fetch_fun) fetch_fun(b);
-                            if (*b.is_null) value.reset();
+                            if (fetch_fun)
+                                fetch_fun(b);
+
+                            //if (*b.is_null)
+                            //    value.reset();
                         };
                     }
                 }
@@ -734,7 +737,8 @@ namespace qtl
                         m_binders[index].bind(nullptr, 0, field->type);
                         m_binderAddins[index].m_after_fetch = [this, index, &value](const binder & b)
                         {
-                            if (*b.is_null) return;
+                            if (*b.is_null)
+                                return;
                             value.open(m_stmt, index, b, std::ios::in);
                         };
                     }
@@ -753,7 +757,8 @@ namespace qtl
                             value.is_null = *b.is_null != 0;
                             value.length = *b.length;
                             value.is_truncated = addin.is_truncated;
-                            if (fetch_fun) fetch_fun(b);
+                            if (fetch_fun)
+                                fetch_fun(b);
                         };
                     }
                 }
