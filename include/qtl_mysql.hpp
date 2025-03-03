@@ -1182,7 +1182,9 @@ namespace qtl
                 bool open(const char* host, const char* user, const char* passwd, const char* db,
                           unsigned long clientflag = 0, unsigned int port = 0, const char* unix_socket = nullptr)
                 {
-                    if (m_mysql == nullptr) m_mysql = mysql_init(nullptr);
+                    if (m_mysql == nullptr)
+                        m_mysql = mysql_init(nullptr);
+
                     return mysql_real_connect(m_mysql, host, user, passwd, db, port, unix_socket, clientflag) != nullptr;
                 }
                 void close()

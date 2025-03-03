@@ -204,8 +204,8 @@ namespace qtl
                     while (ret != SQL_NO_DATA)
                     {
                         driver drvr;
-                        drvr.description.resize(descLen+1);
-                        drvr.attributes.resize(attrLen+1);
+                        drvr.description.resize(descLen);
+                        drvr.attributes.resize(attrLen);
 
                         drivers.push_back(drvr);
 
@@ -1191,6 +1191,12 @@ namespace qtl
                 {
                 }
 
+                database& operator=(database&& src)
+                {
+                    base_database::operator=(std::forward<database>(src));
+                    return *this;
+                }
+
                 void open(const char* server_name, size_t server_name_length,
                           const char* user_name, size_t user_name_length, const char* password, size_t password_length)
                 {
@@ -1346,6 +1352,10 @@ namespace qtl
             {
                 memset(this, 0, sizeof(SQL_TIMESTAMP_STRUCT));
             }
+            timestamp(const SQL_TIMESTAMP_STRUCT& src)
+            {
+                memcpy(this, &src, sizeof(SQL_TIMESTAMP_STRUCT));
+            }
             timestamp(struct tm& tm)
             {
                 year = tm.tm_year + 1900;
@@ -1372,6 +1382,12 @@ namespace qtl
                 memcpy(this, &src, sizeof(SQL_TIMESTAMP_STRUCT));
             }
             timestamp& operator=(const timestamp& src)
+            {
+                if (this != &src)
+                    memcpy(this, &src, sizeof(SQL_TIMESTAMP_STRUCT));
+                return *this;
+            }
+            timestamp& operator=(const SQL_TIMESTAMP_STRUCT& src)
             {
                 if (this != &src)
                     memcpy(this, &src, sizeof(SQL_TIMESTAMP_STRUCT));
