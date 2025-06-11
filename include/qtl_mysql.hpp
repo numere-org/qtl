@@ -1185,6 +1185,10 @@ namespace qtl
                     if (m_mysql == nullptr)
                         m_mysql = mysql_init(nullptr);
 
+                    // Test for possible inaccessible MySQL servers
+                    unsigned int timeout = 10;
+                    mysql_options(m_mysql, MYSQL_OPT_CONNECT_TIMEOUT, (char*)&timeout);
+
                     return mysql_real_connect(m_mysql, host, user, passwd, db, port, unix_socket, clientflag) != nullptr;
                 }
                 void close()
