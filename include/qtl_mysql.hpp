@@ -484,6 +484,12 @@ namespace qtl
                     return mysql_fetch_field_direct(m_result, index)->charsetnr != 63;
                 }
 
+                void resize_binders(size_t n)
+                {
+                    m_binders.resize(n);
+                    m_binderAddins.resize(n);
+                }
+
                 void bind_param(size_t index, const char* param, size_t length)
                 {
                     bind(m_binders[index], param, length);
@@ -795,11 +801,7 @@ namespace qtl
                 };
                 std::vector<binder_addin> m_binderAddins;
 
-                void resize_binders(size_t n)
-                {
-                    m_binders.resize(n);
-                    m_binderAddins.resize(n);
-                }
+
                 void set_binders()
                 {
                     for (size_t i = 0; i != m_binders.size(); i++)
@@ -858,7 +860,14 @@ namespace qtl
 
                 void execute()
                 {
-                    resize_binders(0);
+                    size_t numParams = get_parameter_count();
+
+                    if (!numParams)
+                        resize_binders(0);
+                    else if (numParams == m_binders.size()
+                             && mysql_stmt_bind_param(m_stmt, &m_binders.front()))
+                        throw_exception();
+
                     if (mysql_stmt_execute(m_stmt) != 0)
                         throw_exception();
                 }

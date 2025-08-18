@@ -908,6 +908,19 @@ namespace qtl
                     open(query_text.data(), query_text.size());
                 }
 
+                SQLSMALLINT get_parameter_count() const
+                {
+                    SQLSMALLINT count = 0;
+                    verify_error(SQLNumParams(m_handle, &count));
+
+                    return count;
+                }
+
+                void resize_binders(size_t n)
+                {
+                    m_params.resize(n);
+                }
+
                 void execute()
                 {
                     SQLRETURN ret = SQLExecute(m_handle);
@@ -1215,11 +1228,21 @@ namespace qtl
                 }
                 void open(const char* input_text, size_t text_length = SQL_NTS, SQLSMALLINT driver_completion = SQL_DRIVER_NOPROMPT, SQLHWND hwnd = NULL)
                 {
-                    m_connection.resize(512);
+                    m_connection.resize(1024);
                     SQLSMALLINT out_len = 0;
-                    if (m_opened) close();
-                    verify_error(SQLDriverConnectA(m_handle, hwnd, (SQLCHAR*)input_text, (SQLSMALLINT)text_length,
-                                                   (SQLCHAR*)m_connection.data(), (SQLSMALLINT)m_connection.size(), &out_len, driver_completion));
+
+                    if (m_opened)
+                        close();
+
+                    SQLRETURN res = SQLDriverConnectA(m_handle, hwnd, (SQLCHAR*)input_text,
+                                                      (SQLSMALLINT)text_length,
+                                                      (SQLCHAR*)m_connection.data(),
+                                                      (SQLSMALLINT)m_connection.size(),
+                                                      &out_len, driver_completion);
+
+                    if (res != SQL_SUCCESS && res != SQL_SUCCESS_WITH_INFO)
+                        throw odbc::error(*this, res);
+
                     m_connection.resize(out_len);
                     m_opened = true;
                 }
@@ -1965,6 +1988,10 @@ namespace qtl
             else if (code == SQL_INVALID_HANDLE)
             {
                 m_errmsg = "Invalid handle.";
+            }
+            else if (code == SQL_NO_DATA)
+            {
+                m_errmsg = "No data.";
             }
         }
 
