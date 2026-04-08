@@ -17,6 +17,8 @@
 
 #define FRONTEND
 
+namespace PGSQL
+{
 #include <postgres/libpq-fe.h>
 #include <postgres/libpq/libpq-fs.h>
 #include <postgres/pgtypes_error.h>
@@ -24,6 +26,9 @@
 #include <postgres/pgtypes_timestamp.h>
 #include <postgres/pgtypes_numeric.h>
 #include <postgres/pgtypes_date.h>
+}
+
+#define INVALID_OID (PGSQL::Oid(0))
 
 extern "C"
 {
@@ -196,18 +201,18 @@ namespace qtl
         {
             public:
                 error() : m_errmsg() { }
-                explicit error(PGconn* conn, PGVerbosity verbosity = PQERRORS_DEFAULT, PGContextVisibility show_context = PQSHOW_CONTEXT_ERRORS)
+                explicit error(PGSQL::PGconn* conn, PGSQL::PGVerbosity verbosity = PGSQL::PQERRORS_DEFAULT, PGSQL::PGContextVisibility show_context = PGSQL::PQSHOW_CONTEXT_ERRORS)
                 {
                     //PQsetErrorVerbosity(conn, verbosity);
                     //PQsetErrorContextVisibility(conn, show_context);
-                    const char* errmsg = PQerrorMessage(conn);
+                    const char* errmsg = PGSQL::PQerrorMessage(conn);
                     if (errmsg) m_errmsg = errmsg;
                     else m_errmsg.clear();
                 }
 
-                explicit error(PGresult* res)
+                explicit error(PGSQL::PGresult* res)
                 {
-                    const char* errmsg = PQresultErrorMessage(res);
+                    const char* errmsg = PGSQL::PQresultErrorMessage(res);
                     if (errmsg) m_errmsg = errmsg;
                     else m_errmsg.clear();
                 }
@@ -244,90 +249,90 @@ namespace qtl
 
         struct interval
         {
-            ::interval* value;
+            PGSQL::interval* value;
 
             interval()
             {
-                value = PGTYPESinterval_new();
+                value = PGSQL::PGTYPESinterval_new();
             }
             explicit interval(char* str)
             {
-                value = PGTYPESinterval_from_asc(str, nullptr);
+                value = PGSQL::PGTYPESinterval_from_asc(str, nullptr);
             }
             interval(const interval& src) : interval()
             {
-                verify_pgtypes_error(PGTYPESinterval_copy(src.value, value));
+                verify_pgtypes_error(PGSQL::PGTYPESinterval_copy(src.value, value));
             }
             interval(interval&& src)
             {
                 value = src.value;
-                src.value = PGTYPESinterval_new();
+                src.value = PGSQL::PGTYPESinterval_new();
             }
             ~interval()
             {
-                PGTYPESinterval_free(value);
+                PGSQL::PGTYPESinterval_free(value);
             }
 
             std::string to_string() const
             {
-                return PGTYPESinterval_to_asc(value);
+                return PGSQL::PGTYPESinterval_to_asc(value);
             }
 
             interval& operator=(const interval& src)
             {
                 if (&src != this)
-                    verify_pgtypes_error(PGTYPESinterval_copy(src.value, value));
+                    verify_pgtypes_error(PGSQL::PGTYPESinterval_copy(src.value, value));
                 return *this;
             }
         };
 
         struct timestamp
         {
-            ::timestamp value;
+            PGSQL::timestamp value;
 
             timestamp() = default;
 
             static timestamp now()
             {
                 timestamp result;
-                PGTYPEStimestamp_current(&result.value);
+                PGSQL::PGTYPEStimestamp_current(&result.value);
                 return result;
             }
             explicit timestamp(char* str)
             {
-                value = PGTYPEStimestamp_from_asc(str, nullptr);
+                value = PGSQL::PGTYPEStimestamp_from_asc(str, nullptr);
                 verify_pgtypes_error(1);
             }
 
             int format(char* str, int n, const char* format) const
             {
                 timestamp temp = *this;
-                return PGTYPEStimestamp_fmt_asc(&temp.value, str, n, format);
+                return PGSQL::PGTYPEStimestamp_fmt_asc(&temp.value, str, n, format);
             }
             static timestamp parse(char* str, const char* format)
             {
                 timestamp result;
-                verify_pgtypes_error(PGTYPEStimestamp_defmt_asc(str, format, &result.value));
+                verify_pgtypes_error(PGSQL::PGTYPEStimestamp_defmt_asc(str, format, &result.value));
                 return result;
             }
 
             std::string to_string() const
             {
-                char* str = PGTYPEStimestamp_to_asc(value);
+                char* str = PGSQL::PGTYPEStimestamp_to_asc(value);
                 std::string result = str;
-                PGTYPESchar_free(str);
+                PGSQL::PGTYPESchar_free(str);
                 return result;
             }
 
             timestamp& operator += (const interval& span)
             {
-                verify_pgtypes_error(PGTYPEStimestamp_add_interval(&value, span.value, &value));
+                verify_pgtypes_error(PGSQL::PGTYPEStimestamp_add_interval(&value, span.value, &value));
                 return *this;
             }
 
             timestamp& operator -= (const interval& span)
             {
-                verify_pgtypes_error(PGTYPEStimestamp_sub_interval(&value, span.value, &value));
+                verify_pgtypes_error(PGSQL::PGTYPEStimestamp_sub_interval(&value, span.value, &value));
                 return *this;
             }
         };
@@ -348,7 +353,7 @@ namespace qtl
 
         struct timestamptz
         {
-            ::TimestampTz value;
+            PGSQL::TimestampTz value;
             /*
             timestamptz() = default;
             explicit timestamptz(pg_time_t v)
@@ -376,43 +381,43 @@ namespace qtl
 
         struct date
         {
-            ::date value;
+            PGSQL::date value;
 
             date() = default;
             explicit date(timestamp dt)
             {
-                value = PGTYPESdate_from_timestamp(dt.value);
+                value = PGSQL::PGTYPESdate_from_timestamp(dt.value);
             }
             explicit date(char* str)
             {
-                value = PGTYPESdate_from_asc(str, nullptr);
+                value = PGSQL::PGTYPESdate_from_asc(str, nullptr);
                 verify_pgtypes_error(1);
             }
             explicit date(int year, int month, int day)
             {
                 int mdy[3] = { month, day, year };
-                PGTYPESdate_mdyjul(mdy, &value);
+                PGSQL::PGTYPESdate_mdyjul(mdy, &value);
             }
 
             std::string to_string() const
             {
-                char* str = PGTYPESdate_to_asc(value);
+                char* str = PGSQL::PGTYPESdate_to_asc(value);
                 std::string result = str;
-                PGTYPESchar_free(str);
+                PGSQL::PGTYPESchar_free(str);
                 return str;
             }
 
             static date now()
             {
                 date result;
-                PGTYPESdate_today(&result.value);
+                PGSQL::PGTYPESdate_today(&result.value);
                 return result;
             }
 
             static date parse(char* str, const char* format)
             {
                 date result;
-                verify_pgtypes_error(PGTYPESdate_defmt_asc(&result.value, format, str));
+                verify_pgtypes_error(PGSQL::PGTYPESdate_defmt_asc(&result.value, format, str));
                 return result;
             }
 
@@ -420,7 +425,7 @@ namespace qtl
             {
                 std::string result;
                 result.resize(128);
-                verify_pgtypes_error(PGTYPESdate_fmt_asc(value, format, const_cast<char*>(result.data())));
+                verify_pgtypes_error(PGSQL::PGTYPESdate_fmt_asc(value, format, const_cast<char*>(result.data())));
                 result.resize(strlen(result.data()));
                 return result;
             }
@@ -428,120 +433,120 @@ namespace qtl
             std::tuple<int, int, int> get_date()
             {
                 int mdy[3];
-                PGTYPESdate_julmdy(value, mdy);
+                PGSQL::PGTYPESdate_julmdy(value, mdy);
                 return std::make_tuple(mdy[2], mdy[0], mdy[1]);
             }
 
             int dayofweek()
             {
-                return PGTYPESdate_dayofweek(value);
+                return PGSQL::PGTYPESdate_dayofweek(value);
             }
         };
 
         struct decimal
         {
-            ::decimal value;
+            PGSQL::decimal value;
         };
 
         struct numeric
         {
-            ::numeric* value;
+            PGSQL::numeric* value;
 
             numeric()
             {
-                value = PGTYPESnumeric_new();
+                value = PGSQL::PGTYPESnumeric_new();
             }
             numeric(int v) : numeric()
             {
-                verify_pgtypes_error(PGTYPESnumeric_from_int(v, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_from_int(v, value));
             }
             numeric(long v) : numeric()
             {
-                verify_pgtypes_error(PGTYPESnumeric_from_long(v, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_from_long(v, value));
             }
             numeric(double v) : numeric()
             {
-                verify_pgtypes_error(PGTYPESnumeric_from_double(v, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_from_double(v, value));
             }
             numeric(const decimal& v) : numeric()
             {
-                verify_pgtypes_error(PGTYPESnumeric_from_decimal(const_cast<::decimal*>(&v.value), value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_from_decimal(const_cast<PGSQL::decimal*>(&v.value), value));
             }
             numeric(const numeric& src) : numeric()
             {
-                verify_pgtypes_error(PGTYPESnumeric_copy(src.value, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_copy(src.value, value));
             }
             explicit numeric(const char* str)
             {
-                value = PGTYPESnumeric_from_asc(const_cast<char*>(str), nullptr);
+                value = PGSQL::PGTYPESnumeric_from_asc(const_cast<char*>(str), nullptr);
             }
             ~numeric()
             {
-                PGTYPESnumeric_free(value);
+                PGSQL::PGTYPESnumeric_free(value);
             }
 
             operator double() const
             {
                 double result;
-                verify_pgtypes_error(PGTYPESnumeric_to_double(value, &result));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_to_double(value, &result));
                 return result;
             }
 
             operator int() const
             {
                 int result;
-                verify_pgtypes_error(PGTYPESnumeric_to_int(value, &result));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_to_int(value, &result));
                 return result;
             }
 
             operator long() const
             {
                 long result;
-                verify_pgtypes_error(PGTYPESnumeric_to_long(value, &result));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_to_long(value, &result));
                 return result;
             }
 
             operator decimal() const
             {
                 decimal result;
-                verify_pgtypes_error(PGTYPESnumeric_to_decimal(value, &result.value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_to_decimal(value, &result.value));
                 return result;
             }
 
             int compare(const numeric& other) const
             {
-                return PGTYPESnumeric_cmp(value, other.value);
+                return PGSQL::PGTYPESnumeric_cmp(value, other.value);
             }
 
             inline numeric& operator+=(const numeric& b)
             {
-                verify_pgtypes_error(PGTYPESnumeric_add(value, b.value, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_add(value, b.value, value));
                 return *this;
             }
 
             inline numeric& operator-=(const numeric& b)
             {
-                verify_pgtypes_error(PGTYPESnumeric_sub(value, b.value, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_sub(value, b.value, value));
                 return *this;
             }
 
             inline numeric& operator*=(const numeric& b)
             {
-                verify_pgtypes_error(PGTYPESnumeric_mul(value, b.value, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_mul(value, b.value, value));
                 return *this;
             }
 
             inline numeric& operator/=(const numeric& b)
             {
-                verify_pgtypes_error(PGTYPESnumeric_div(value, b.value, value));
+                verify_pgtypes_error(PGSQL::PGTYPESnumeric_div(value, b.value, value));
                 return *this;
             }
 
             std::string to_string(int dscale = -1) const
             {
-                char* str = PGTYPESnumeric_to_asc(value, dscale);
+                char* str = PGSQL::PGTYPESnumeric_to_asc(value, dscale);
                 std::string result = str;
-                PGTYPESchar_free(str);
+                PGSQL::PGTYPESchar_free(str);
                 return result;
             }
         };
@@ -607,8 +612,8 @@ namespace qtl
         class large_object : public qtl::blobbuf
         {
             public:
-                large_object() : m_conn(nullptr), m_id(InvalidOid), m_fd(-1) { }
-                large_object(PGconn* conn, Oid loid, std::ios_base::openmode mode)
+                large_object() : m_conn(nullptr), m_id(INVALID_OID), m_fd(-1) { }
+                large_object(PGSQL::PGconn* conn, PGSQL::Oid loid, std::ios_base::openmode mode)
                 {
                     open(conn, loid, mode);
                 }
@@ -624,30 +629,30 @@ namespace qtl
                     close();
                 }
 
-                static large_object create(PGconn* conn, Oid loid = InvalidOid)
+                static large_object create(PGSQL::PGconn* conn, PGSQL::Oid loid = INVALID_OID)
                 {
-                    Oid oid = lo_create(conn, loid);
-                    if (oid == InvalidOid)
+                    PGSQL::Oid oid = PGSQL::lo_create(conn, loid);
+                    if (oid == INVALID_OID)
                         throw error(conn);
                     return large_object(conn, oid, std::ios::in | std::ios::out | std::ios::binary);
                 }
-                static large_object load(PGconn* conn, const char* filename, Oid loid = InvalidOid)
+                static large_object load(PGSQL::PGconn* conn, const char* filename, PGSQL::Oid loid = INVALID_OID)
                 {
-                    Oid oid = lo_import_with_oid(conn, filename, loid);
-                    if (oid == InvalidOid)
+                    PGSQL::Oid oid = PGSQL::lo_import_with_oid(conn, filename, loid);
+                    if (oid == INVALID_OID)
                         throw error(conn);
                     return large_object(conn, oid, std::ios::in | std::ios::out | std::ios::binary);
                 }
                 void save(const char* filename) const
                 {
-                    if (lo_export(m_conn, m_id, filename) < 0)
+                    if (PGSQL::lo_export(m_conn, m_id, filename) < 0)
                         throw error(m_conn);
                 }
 
                 void unlink()
                 {
                     close();
-                    if (lo_unlink(m_conn, m_id) < 0)
+                    if (PGSQL::lo_unlink(m_conn, m_id) < 0)
                         throw error(m_conn);
                 }
 
@@ -665,12 +670,12 @@ namespace qtl
                 {
                     return m_fd >= 0;
                 }
-                Oid oid() const
+                PGSQL::Oid oid() const
                 {
                     return m_id;
                 }
 
-                void open(PGconn* conn, Oid loid, std::ios_base::openmode mode)
+                void open(PGSQL::PGconn* conn, PGSQL::Oid loid, std::ios_base::openmode mode)
                 {
                     int lomode = 0;
                     if (mode & std::ios_base::in)
@@ -679,7 +684,7 @@ namespace qtl
                         lomode |= INV_WRITE;
                     m_conn = conn;
                     m_id = loid;
-                    m_fd = lo_open(m_conn, loid, lomode);
+                    m_fd = PGSQL::lo_open(m_conn, loid, lomode);
                     if (m_fd < 0)
                         throw error(m_conn);
 
@@ -687,7 +692,7 @@ namespace qtl
                     init_buffer(mode);
                     if (mode & std::ios_base::trunc)
                     {
-                        if (lo_truncate(m_conn, m_fd, 0) < 0)
+                        if (PGSQL::lo_truncate(m_conn, m_fd, 0) < 0)
                             throw error(m_conn);
                     }
                 }
@@ -697,7 +702,7 @@ namespace qtl
                     if (m_fd >= 0)
                     {
                         overflow();
-                        if (lo_close(m_conn, m_fd) < 0)
+                        if (PGSQL::lo_close(m_conn, m_fd) < 0)
                             throw error(m_conn);
                         m_fd = -1;
                     }
@@ -711,19 +716,19 @@ namespace qtl
 
                 size_t size() const
                 {
-                    pg_int64 size = 0;
+                    PGSQL::pg_int64 size = 0;
                     if (m_fd >= 0)
                     {
-                        pg_int64 org = lo_tell64(m_conn, m_fd);
-                        size = lo_lseek64(m_conn, m_fd, 0, SEEK_END);
-                        lo_lseek64(m_conn, m_fd, org, SEEK_SET);
+                        PGSQL::pg_int64 org = PGSQL::lo_tell64(m_conn, m_fd);
+                        size = PGSQL::lo_lseek64(m_conn, m_fd, 0, SEEK_END);
+                        PGSQL::lo_lseek64(m_conn, m_fd, org, SEEK_SET);
                     }
                     return size;
                 }
 
                 void resize(size_t n)
                 {
-                    if (m_fd >= 0 && lo_truncate64(m_conn, m_fd, n) < 0)
+                    if (m_fd >= 0 && PGSQL::lo_truncate64(m_conn, m_fd, n) < 0)
                         throw error(m_conn);
                 }
 
@@ -740,17 +745,17 @@ namespace qtl
 
                 virtual bool read_blob(char* buffer, off_type& count, pos_type position) override
                 {
-                    return lo_lseek64(m_conn, m_fd, position, SEEK_SET) >= 0 && lo_read(m_conn, m_fd, buffer, count) > 0;
+                    return PGSQL::lo_lseek64(m_conn, m_fd, position, SEEK_SET) >= 0 && PGSQL::lo_read(m_conn, m_fd, buffer, count) > 0;
                 }
                 virtual void write_blob(const char* buffer, size_t count) override
                 {
-                    if (lo_write(m_conn, m_fd, buffer, count) < 0)
+                    if (PGSQL::lo_write(m_conn, m_fd, buffer, count) < 0)
                         throw error(m_conn);
                 }
 
             private:
-                PGconn* m_conn;
-                Oid m_id;
+                PGSQL::PGconn* m_conn;
+                PGSQL::Oid m_id;
                 int m_fd;
         };
 
@@ -778,12 +783,12 @@ namespace qtl
         	};
         */
 
-        template<typename T, Oid id>
+        template<typename T, PGSQL::Oid id>
         struct base_object_traits
         {
             typedef T value_type;
             enum { type_id = id };
-            static bool is_match(Oid v)
+            static bool is_match(PGSQL::Oid v)
             {
                 return v == type_id;
             }
@@ -810,7 +815,7 @@ namespace qtl
         QTL_POSTGRES_SIMPLE_TRAITS(float, FLOAT4OID, FLOAT4ARRAYOID)
         QTL_POSTGRES_SIMPLE_TRAITS(double, FLOAT8OID, 1022)
 
-        template<typename T, Oid id, Oid array_id>
+        template<typename T, PGSQL::Oid id, PGSQL::Oid array_id>
         struct integral_traits : public base_object_traits<T, id>
         {
             enum { array_type_id  = array_id };
@@ -839,7 +844,7 @@ namespace qtl
         {
         };
 
-        template<> struct object_traits<Oid> : public integral_traits<Oid, OIDOID, OIDARRAYOID>
+        template<> struct object_traits<PGSQL::Oid> : public integral_traits<PGSQL::Oid, OIDOID, OIDARRAYOID>
         {
         };
 
@@ -851,7 +856,7 @@ namespace qtl
 
         template<> struct object_traits<const char*> : public text_traits<const char*>
         {
-            static bool is_match(Oid v)
+            static bool is_match(PGSQL::Oid v)
             {
                 return v == TEXTOID || v == VARCHAROID || v == BPCHAROID;
             }
@@ -872,7 +877,7 @@ namespace qtl
 
         template<> struct object_traits<std::string> : public text_traits<std::string>
         {
-            static bool is_match(Oid v)
+            static bool is_match(PGSQL::Oid v)
             {
                 return v == TEXTOID || v == VARCHAROID || v == BPCHAROID;
             }
@@ -926,7 +931,7 @@ namespace qtl
             enum { array_type_id = INTERVALOID + 1 };
             static const char* get(value_type& result, const char* data, const char* end)
             {
-                const ::interval* value = reinterpret_cast<const ::interval*>(data);
+                const PGSQL::interval* value = reinterpret_cast<const PGSQL::interval*>(data);
                 result.value->time = detail::ntoh(value->time);
                 result.value->month = detail::ntoh((int32_t)value->month);
                 return data + sizeof(interval);
@@ -1011,7 +1016,7 @@ namespace qtl
         template<> struct object_traits<large_object> : public base_object_traits<large_object, OIDOID>
         {
             enum { array_type_id = OIDARRAYOID };
-            static value_type get(PGconn* conn, const char* data, const char* end)
+            static value_type get(PGSQL::PGconn* conn, const char* data, const char* end)
             {
                 int32_t oid;
                 object_traits<int32_t>::get(oid, data, end);
@@ -1023,7 +1028,7 @@ namespace qtl
             }
         };
 
-        template<typename T, Oid id>
+        template<typename T, PGSQL::Oid id>
         struct vector_traits : public base_object_traits<std::vector<T>, id>
         {
             typedef typename base_object_traits<std::vector<T>, id>::value_type value_type;
@@ -1081,7 +1086,7 @@ namespace qtl
             }
         };
 
-        template<typename Iterator, Oid id>
+        template<typename Iterator, PGSQL::Oid id>
         struct iterator_traits : public base_object_traits<Iterator, id>
         {
             static const char* get(Iterator first, Iterator last, const char* data, const char* end)
@@ -1138,7 +1143,7 @@ namespace qtl
             }
         };
 
-        template<typename Iterator, Oid id>
+        template<typename Iterator, PGSQL::Oid id>
         struct range_traits : public base_object_traits<std::pair<Iterator, Iterator>, id>
         {
             static const char* get(std::pair<Iterator, Iterator>& result, const char* data, const char* end)
@@ -1162,7 +1167,7 @@ namespace qtl
         {
         };
 
-        template<typename T, size_t N, Oid id>
+        template<typename T, size_t N, PGSQL::Oid id>
         struct carray_traits : public base_object_traits<T(&)[N], id>
         {
             static const char* get(T (&result)[N], const char* data, const char* end)
@@ -1175,7 +1180,7 @@ namespace qtl
             }
         };
 
-        template<typename T, size_t N, Oid id>
+        template<typename T, size_t N, PGSQL::Oid id>
         struct array_traits : public base_object_traits<std::array<T, N>, id>
         {
             static const char* get(std::array<T, N>& result, const char* data, const char* end)
@@ -1201,7 +1206,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
             struct field_header
             {
-                Oid type;
+                PGSQL::Oid type;
                 int32_t length;
             };
 
@@ -1289,7 +1294,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
         }
 
-        template<typename Tuple, Oid id>
+        template<typename Tuple, PGSQL::Oid id>
         struct tuple_traits : public base_object_traits<Tuple, id>
         {
             typedef typename base_object_traits<Tuple, id>::value_type value_type;
@@ -1313,12 +1318,12 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
         };
 
         template<typename... Types>
-        struct object_traits<std::tuple<Types...>> : public tuple_traits<std::tuple<Types...>, InvalidOid>
+        struct object_traits<std::tuple<Types...>> : public tuple_traits<std::tuple<Types...>, INVALID_OID>
         {
         };
 
         template<typename T1, typename T2>
-        struct object_traits<std::pair<T1, T2>> : public tuple_traits<std::pair<T1, T2>, InvalidOid>
+        struct object_traits<std::pair<T1, T2>> : public tuple_traits<std::pair<T1, T2>, INVALID_OID>
         {
         };
 
@@ -1333,14 +1338,14 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     m_value = pair.first;
                     m_length = pair.second;
                 }
-                binder(const char* data, size_t n, Oid oid)
+                binder(const char* data, size_t n, PGSQL::Oid oid)
                 {
                     m_type = oid;
                     m_value = data;
                     m_length = n;
                 }
 
-                Oid constexpr type() const
+                PGSQL::Oid constexpr type() const
                 {
                     return m_type;
                 }
@@ -1364,7 +1369,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     return v;
                 }
                 template<typename T>
-                T get(PGconn* conn)
+                T get(PGSQL::PGconn* conn)
                 {
                     if (!object_traits<T>::is_match(m_type))
                         throw std::bad_cast();
@@ -1374,7 +1379,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename T>
                 void get(T& v)
                 {
-                    if (object_traits<T>::type_id != InvalidOid && !object_traits<T>::is_match(m_type))
+                    if (object_traits<T>::type_id != INVALID_OID && !object_traits<T>::is_match(m_type))
                         throw std::bad_cast();
 
                     object_traits<T>::get(v, m_value, m_value + m_length);
@@ -1419,7 +1424,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 }
 
             private:
-                Oid m_type;
+                PGSQL::Oid m_type;
                 const char* m_value;
                 size_t m_length;
                 std::vector<char> m_data;
@@ -1462,7 +1467,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
         class result
         {
             public:
-                result(PGresult* res) : m_res(res) { }
+                result(PGSQL::PGresult* res) : m_res(res) { }
                 result(const result&) = delete;
                 result(result&& src)
                 {
@@ -1486,7 +1491,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     clear();
                 }
 
-                PGresult* handle() const
+                PGSQL::PGresult* handle() const
                 {
                     return m_res;
                 }
@@ -1495,14 +1500,14 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     return m_res != nullptr;
                 }
 
-                ExecStatusType status() const
+                PGSQL::ExecStatusType status() const
                 {
-                    return PQresultStatus(m_res);
+                    return PGSQL::PQresultStatus(m_res);
                 }
 
                 long long affected_rows() const
                 {
-                    char* result = PQcmdTuples(m_res);
+                    char* result = PGSQL::PQcmdTuples(m_res);
                     if (result)
                         return strtoll(result, nullptr, 10);
                     else
@@ -1511,79 +1516,79 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 int64_t get_row_count() const
                 {
-                    return PQntuples(m_res);
+                    return PGSQL::PQntuples(m_res);
                 }
 
                 unsigned int get_column_count() const
                 {
-                    return PQnfields(m_res);
+                    return PGSQL::PQnfields(m_res);
                 }
 
                 int get_param_count() const
                 {
-                    return PQnparams(m_res);
+                    return PGSQL::PQnparams(m_res);
                 }
 
-                Oid get_param_type(int col) const
+                PGSQL::Oid get_param_type(int col) const
                 {
-                    return PQparamtype(m_res, col);
+                    return PGSQL::PQparamtype(m_res, col);
                 }
 
                 const char* get_column_name(int col) const
                 {
-                    return PQfname(m_res, col);
+                    return PGSQL::PQfname(m_res, col);
                 }
                 int get_column_index(const char* name) const
                 {
-                    return PQfnumber(m_res, name);
+                    return PGSQL::PQfnumber(m_res, name);
                 }
                 int get_column_length(int col) const
                 {
-                    return PQfsize(m_res, col);
+                    return PGSQL::PQfsize(m_res, col);
                 }
-                Oid get_column_type(int col) const
+                PGSQL::Oid get_column_type(int col) const
                 {
-                    return PQftype(m_res, col);
+                    return PGSQL::PQftype(m_res, col);
                 }
 
                 const char* get_value(int row, int col) const
                 {
-                    return PQgetvalue(m_res, row, col);
+                    return PGSQL::PQgetvalue(m_res, row, col);
                 }
 
                 bool is_null(int row, int col) const
                 {
-                    return PQgetisnull(m_res, row, col);
+                    return PGSQL::PQgetisnull(m_res, row, col);
                 }
 
                 int length(int row, int col) const
                 {
-                    return PQgetlength(m_res, row, col);
+                    return PGSQL::PQgetlength(m_res, row, col);
                 }
 
-                Oid insert_oid() const
+                PGSQL::Oid insert_oid() const
                 {
-                    return PQoidValue(m_res);
+                    return PGSQL::PQoidValue(m_res);
                 }
 
-                template<ExecStatusType... Excepted>
+                template<PGSQL::ExecStatusType... Excepted>
                 void verify_error()
                 {
                     if (m_res)
                     {
-                        ExecStatusType got = status();
-                        if (! in<ExecStatusType, Excepted...>(got))
+                        PGSQL::ExecStatusType got = status();
+                        if (! in<PGSQL::ExecStatusType, Excepted...>(got))
                             throw error(m_res);
                     }
                 }
 
-                template<ExecStatusType... Excepted>
+                template<PGSQL::ExecStatusType... Excepted>
                 void verify_error(error& e)
                 {
                     if (m_res)
                     {
-                        ExecStatusType got = status();
-                        if (!in<ExecStatusType, Excepted...>(got))
+                        PGSQL::ExecStatusType got = status();
+                        if (!in<PGSQL::ExecStatusType, Excepted...>(got))
                             e = error(m_res);
                     }
                 }
@@ -1598,7 +1603,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 }
 
             private:
-                PGresult* m_res;
+                PGSQL::PGresult* m_res;
         };
 
         class base_statement
@@ -1744,7 +1749,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     }
                     else
                     {
-                        Oid oid = m_res.get_column_type(index);
+                        PGSQL::Oid oid = m_res.get_column_type(index);
                         switch (oid)
                         {
                             case object_traits<bool>::type_id:
@@ -1768,8 +1773,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                             case object_traits<int64_t>::type_id:
                                 value = field_cast<int64_t>(index);
                                 break;
-                            case object_traits<Oid>::type_id:
-                                value = field_cast<Oid>(index);
+                            case object_traits<PGSQL::Oid>::type_id:
+                                value = field_cast<PGSQL::Oid>(index);
                                 break;
                             case object_traits<std::string>::type_id:
                                 value = field_cast<std::string>(index);
@@ -1807,8 +1812,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                             case object_traits<int64_t>::array_type_id:
                                 value = field_cast<std::vector<int64_t>>(index);
                                 break;
-                            case object_traits<Oid>::array_type_id:
-                                value = field_cast<std::vector<Oid>>(index);
+                            case object_traits<PGSQL::Oid>::array_type_id:
+                                value = field_cast<std::vector<PGSQL::Oid>>(index);
                                 break;
                             case object_traits<std::string>::array_type_id:
                                 value = field_cast<std::vector<std::string>>(index);
@@ -1831,12 +1836,12 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 #endif // C++17
 
             protected:
-                PGconn* m_conn;
+                PGSQL::PGconn* m_conn;
                 result m_res;
                 std::string _name;
                 std::vector<binder> m_binders;
 
-                template<ExecStatusType... Excepted>
+                template<PGSQL::ExecStatusType... Excepted>
                 void verify_error()
                 {
                     if (m_res)
@@ -1848,7 +1853,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 {
                     while (res)
                     {
-                        res = PQgetResult(m_conn);
+                        res = PGSQL::PQgetResult(m_conn);
                     }
                 }
 
@@ -1880,25 +1885,25 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     {
                         std::ostringstream oss;
                         oss << "DEALLOCATE " << _name << ";";
-                        result res = PQexec(m_conn, oss.str().data());
+                        result res = PGSQL::PQexec(m_conn, oss.str().data());
                         error e(res.handle());
                     }
                 }
 
-                void open(const char* command, int nParams = 0, const Oid* paramTypes = nullptr)
+                void open(const char* command, int nParams = 0, const PGSQL::Oid* paramTypes = nullptr)
                 {
                     _name.resize(sizeof(intptr_t) * 2 + 1);
                     int n = sprintf(const_cast<char*>(_name.data()), "q%p", this);
                     _name.resize(n);
                     std::transform(_name.begin(), _name.end(), _name.begin(), tolower);
-                    result res = PQprepare(m_conn, _name.data(), command, nParams, paramTypes);
-                    res.verify_error<PGRES_COMMAND_OK>();
+                    result res = PGSQL::PQprepare(m_conn, _name.data(), command, nParams, paramTypes);
+                    res.verify_error<PGSQL::PGRES_COMMAND_OK>();
                 }
                 template<typename... Types>
                 void open(const char* command)
                 {
                     auto binder_list = make_binder_list(Types()...);
-                    std::array<Oid, sizeof...(Types)> types;
+                    std::array<PGSQL::Oid, sizeof...(Types)> types;
                     std::transform(binder_list.begin(), binder_list.end(), types.begin(), [](const binder & b)
                     {
                         return b.type();
@@ -1909,19 +1914,19 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 void attach(const char* name)
                 {
-                    result res = PQdescribePrepared(m_conn, name);
-                    res.verify_error<PGRES_COMMAND_OK>();
+                    result res = PGSQL::PQdescribePrepared(m_conn, name);
+                    res.verify_error<PGSQL::PGRES_COMMAND_OK>();
                     _name = name;
                 }
 
                 void execute()
                 {
-                    if (!PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
+                    if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
                         throw error(m_conn);
-                    if (!PQsetSingleRowMode(m_conn))
+                    if (!PGSQL::PQsetSingleRowMode(m_conn))
                         throw error(m_conn);
-                    m_res = PQgetResult(m_conn);
-                    verify_error<PGRES_COMMAND_OK, PGRES_SINGLE_TUPLE>();
+                    m_res = PGSQL::PQgetResult(m_conn);
+                    verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_SINGLE_TUPLE>();
                 }
 
                 template<typename Types>
@@ -1942,18 +1947,18 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                             lengths[i] = static_cast<int>(m_binders[i].length());
                             formats[i] = 1;
                         }
-                        if (!PQsendQueryPrepared(m_conn, _name.data(), static_cast<int>(m_binders.size()), values.data(), lengths.data(), formats.data(), 1))
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), static_cast<int>(m_binders.size()), values.data(), lengths.data(), formats.data(), 1))
                             throw error(m_conn);
                     }
                     else
                     {
-                        if (!PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
                             throw error(m_conn);
                     }
-                    if (!PQsetSingleRowMode(m_conn))
+                    if (!PGSQL::PQsetSingleRowMode(m_conn))
                         throw error(m_conn);
-                    m_res = PQgetResult(m_conn);
-                    verify_error<PGRES_COMMAND_OK, PGRES_SINGLE_TUPLE, PGRES_TUPLES_OK>();
+                    m_res = PGSQL::PQgetResult(m_conn);
+                    verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_SINGLE_TUPLE, PGSQL::PGRES_TUPLES_OK>();
                 }
 
                 template<typename Types>
@@ -1961,8 +1966,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 {
                     if (m_res)
                     {
-                        ExecStatusType status = m_res.status();
-                        if (status == PGRES_SINGLE_TUPLE)
+                        PGSQL::ExecStatusType status = m_res.status();
+                        if (status == PGSQL::PGRES_SINGLE_TUPLE)
                         {
                             int count = m_res.get_column_count();
                             if (count > 0)
@@ -1975,12 +1980,12 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                                 }
                                 qtl::bind_record(*this, std::forward<Types>(values));
                             }
-                            m_res = PQgetResult(m_conn);
+                            m_res = PGSQL::PQgetResult(m_conn);
                             return true;
                         }
                         else
                         {
-                            verify_error<PGRES_TUPLES_OK>();
+                            verify_error<PGSQL::PGRES_TUPLES_OK>();
                         }
                     }
                     return false;
@@ -1988,8 +1993,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 bool next_result()
                 {
-                    m_res = PQgetResult(m_conn);
-                    return m_res && m_res.status() == PGRES_SINGLE_TUPLE;
+                    m_res = PGSQL::PQgetResult(m_conn);
+                    return m_res && m_res.status() == PGSQL::PGRES_SINGLE_TUPLE;
                 }
 
                 void reset()
@@ -2020,7 +2025,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 ~base_database()
                 {
                     if (m_conn)
-                        PQfinish(m_conn);
+                        PGSQL::PQfinish(m_conn);
                 }
 
                 base_database& operator=(const base_database&) = delete;
@@ -2029,7 +2034,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     if (this != &src)
                     {
                         if (m_conn)
-                            PQfinish(m_conn);
+                            PGSQL::PQfinish(m_conn);
                         m_conn = src.m_conn;
                         src.m_conn = nullptr;
                     }
@@ -2038,94 +2043,94 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 const char* errmsg() const
                 {
-                    return PQerrorMessage(m_conn);
+                    return PGSQL::PQerrorMessage(m_conn);
                 }
 
-                PGconn* handle()
+                PGSQL::PGconn* handle()
                 {
                     return m_conn;
                 }
 
                 const char* encoding() const
                 {
-                    int encoding = PQclientEncoding(m_conn);
-                    return (encoding >= 0) ? pg_encoding_to_char(encoding) : nullptr;
+                    int encoding = PGSQL::PQclientEncoding(m_conn);
+                    return (encoding >= 0) ? PGSQL::pg_encoding_to_char(encoding) : nullptr;
                 }
 
                 void encoding(const char* encoding)
                 {
-                    if (PQsetClientEncoding(m_conn, encoding))
+                    if (PGSQL::PQsetClientEncoding(m_conn, encoding))
                         throw error(m_conn);
                 }
 
                 void trace(FILE* stream)
                 {
-                    PQtrace(m_conn, stream);
+                    PGSQL::PQtrace(m_conn, stream);
                 }
                 void untrace()
                 {
-                    PQuntrace(m_conn);
+                    PGSQL::PQuntrace(m_conn);
                 }
 
                 const char* current() const
                 {
-                    return PQdb(m_conn);
+                    return PGSQL::PQdb(m_conn);
                 }
 
                 const char* user() const
                 {
-                    return PQuser(m_conn);
+                    return PGSQL::PQuser(m_conn);
                 }
 
                 const char* host() const
                 {
-                    return PQhost(m_conn);
+                    return PGSQL::PQhost(m_conn);
                 }
 
                 const char* password() const
                 {
-                    return PQpass(m_conn);
+                    return PGSQL::PQpass(m_conn);
                 }
 
                 const char* port() const
                 {
-                    return PQport(m_conn);
+                    return PGSQL::PQport(m_conn);
                 }
 
                 const char* options() const
                 {
-                    return PQoptions(m_conn);
+                    return PGSQL::PQoptions(m_conn);
                 }
 
-                ConnStatusType status() const
+                PGSQL::ConnStatusType status() const
                 {
-                    return PQstatus(m_conn);
+                    return PGSQL::PQstatus(m_conn);
                 }
 
-                PGTransactionStatusType transactionStatus() const
+                PGSQL::PGTransactionStatusType transactionStatus() const
                 {
-                    return PQtransactionStatus(m_conn);
+                    return PGSQL::PQtransactionStatus(m_conn);
                 }
 
                 const char* parameterStatus(const char* paramName) const
                 {
-                    return PQparameterStatus(m_conn, paramName);
+                    return PGSQL::PQparameterStatus(m_conn, paramName);
                 }
 
                 void reset()
                 {
-                    if (status() == CONNECTION_BAD)
-                        PQreset(m_conn);
+                    if (status() == PGSQL::CONNECTION_BAD)
+                        PGSQL::PQreset(m_conn);
                 }
 
                 void close()
                 {
-                    PQfinish(m_conn);
+                    PGSQL::PQfinish(m_conn);
                     m_conn = nullptr;
                 }
 
             protected:
-                PGconn* m_conn;
+                PGSQL::PGconn* m_conn;
                 void throw_exception()
                 {
                     throw postgres::error(m_conn);
@@ -2143,7 +2148,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename ValueProc>
                 void fetch_all(ValueProc& proc)
                 {
-                    int row_count = PQntuples(m_res.handle());
+                    int row_count = PGSQL::PQntuples(m_res.handle());
                     if (row_count > 0)
                     {
                         int col_count = m_res.get_column_count();
@@ -2179,14 +2184,14 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     }
                     keywords.push_back(nullptr);
                     values.push_back(nullptr);
-                    m_conn = PQconnectdbParams(keywords.data(), values.data(), expand_dbname);
-                    return m_conn != nullptr && status() == CONNECTION_OK;
+                    m_conn = PGSQL::PQconnectdbParams(keywords.data(), values.data(), expand_dbname);
+                    return m_conn != nullptr && status() == PGSQL::CONNECTION_OK;
                 }
 
                 bool open(const char* conninfo)
                 {
-                    m_conn = PQconnectdb(conninfo);
-                    return m_conn != nullptr && status() == CONNECTION_OK;
+                    m_conn = PGSQL::PQconnectdb(conninfo);
+                    return m_conn != nullptr && status() == PGSQL::CONNECTION_OK;
                 }
 
                 bool open(const char* host, const char* user, const char* password,
@@ -2194,8 +2199,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 {
                     char port_text[16];
                     sprintf(port_text, "%u", port);
-                    m_conn = PQsetdbLogin(host, port_text, options, nullptr, db, user, password);
-                    return m_conn != nullptr && status() == CONNECTION_OK;
+                    m_conn = PGSQL::PQsetdbLogin(host, port_text, options, nullptr, db, user, password);
+                    return m_conn != nullptr && status() == PGSQL::CONNECTION_OK;
                 }
 
                 statement open_command(const char* query_text, size_t /*text_length*/)
@@ -2215,18 +2220,18 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 void simple_execute(const char* query_text, uint64_t* paffected = nullptr)
                 {
-                    qtl::postgres::result res(PQexec(m_conn, query_text));
+                    qtl::postgres::result res(PGSQL::PQexec(m_conn, query_text));
                     if (!res) throw_exception();
-                    res.verify_error<PGRES_COMMAND_OK, PGRES_TUPLES_OK>();
+                    res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_TUPLES_OK>();
                     if (paffected) *paffected = res.affected_rows();
                 }
                 template<typename ValueProc>
                 void simple_query(const char* query_text, ValueProc&& proc)
                 {
-                    qtl::postgres::result res(PQexec(m_conn, query_text));
+                    qtl::postgres::result res(PGSQL::PQexec(m_conn, query_text));
                     if (!res) throw_exception();
-                    res.verify_error<PGRES_COMMAND_OK, PGRES_TUPLES_OK>();
-                    if (res.status() == PGRES_TUPLES_OK)
+                    res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_TUPLES_OK>();
+                    if (res.status() == PGSQL::PGRES_TUPLES_OK)
                     {
                         simple_statment stmt(*this, std::move(res));
                         stmt.fetch_all(std::forward<ValueProc>(proc));
@@ -2256,20 +2261,20 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 bool is_alive()
                 {
-                    qtl::postgres::result res(PQexec(m_conn, ""));
-                    return res && res.status() == PGRES_COMMAND_OK;
+                    qtl::postgres::result res(PGSQL::PQexec(m_conn, ""));
+                    return res && res.status() == PGSQL::PGRES_COMMAND_OK;
                 }
 
         };
 
-        inline int event_flags(PostgresPollingStatusType status)
+        inline int event_flags(PGSQL::PostgresPollingStatusType status)
         {
             int flags = 0;
-            if (status == PGRES_POLLING_READING)
+            if (status == PGSQL::PGRES_POLLING_READING)
                 flags |= event::ef_read;
-            else if (status == PGRES_POLLING_WRITING)
+            else if (status == PGSQL::PGRES_POLLING_WRITING)
                 flags |= event::ef_write;
-            else if (status == PGRES_POLLING_FAILED)
+            else if (status == PGSQL::PGRES_POLLING_FAILED)
                 flags |= event::ef_exception;
             return flags;
         }
@@ -2277,9 +2282,9 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
         class async_connection;
 
         template<typename Handler>
-        inline void async_wait(qtl::event* event, PGconn* conn, int timeout, Handler&& handler)
+        inline void async_wait(qtl::event* event, PGSQL::PGconn* conn, int timeout, Handler&& handler)
         {
-            int flushed = PQflush(conn);
+            int flushed = PGSQL::PQflush(conn);
             if (flushed < 0)
             {
                 handler(error(conn));
@@ -2318,9 +2323,9 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     }
                     else if (flags & (qtl::event::ef_read | qtl::event::ef_exception))
                     {
-                        if (PQconsumeInput(conn))
+                        if (PGSQL::PQconsumeInput(conn))
                         {
-                            if (!PQisBusy(conn))
+                            if (!PGSQL::PQisBusy(conn))
                                 handler(postgres::error());
                             else
                                 async_wait(event, conn, timeout, handler);
@@ -2370,24 +2375,24 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 	void handler(const qtl::mysql::error& e);
                  */
                 template<typename Handler>
-                void open(Handler&& handler, const char* command, int nParams = 0, const Oid* paramTypes = nullptr)
+                void open(Handler&& handler, const char* command, int nParams = 0, const PGSQL::Oid* paramTypes = nullptr)
                 {
                     _name.resize(sizeof(intptr_t) * 2 + 1);
                     int n = sprintf(const_cast<char*>(_name.data()), "q%p", this);
                     _name.resize(n);
                     std::transform(_name.begin(), _name.end(), _name.begin(), tolower);
-                    if (PQsendPrepare(m_conn, _name.data(), command, nParams, paramTypes))
+                    if (PGSQL::PQsendPrepare(m_conn, _name.data(), command, nParams, paramTypes))
                     {
                         async_wait([this, handler](error e) mutable
                         {
                             if (!e)
                             {
-                                m_res = PQgetResult(m_conn);
+                                m_res = PGSQL::PQgetResult(m_conn);
                                 if (m_res)
                                 {
-                                    m_res.verify_error<PGRES_COMMAND_OK>(e);
+                                    m_res.verify_error<PGSQL::PGRES_COMMAND_OK>(e);
                                     while (m_res)
-                                        m_res = PQgetResult(m_conn);
+                                        m_res = PGSQL::PQgetResult(m_conn);
                                 }
                             }
                             handler(e);
@@ -2404,7 +2409,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 void open(Handler&& handler, const char* command)
                 {
                     auto binder_list = make_binder_list(Types()...);
-                    std::array<Oid, sizeof...(Types)> types;
+                    std::array<PGSQL::Oid, sizeof...(Types)> types;
                     std::transform(binder_list.begin(), binder_list.end(), types.begin(), [](const binder & b)
                     {
                         return b.type();
@@ -2417,16 +2422,16 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 {
                     while (m_res)
                     {
-                        m_res = PQgetResult(m_conn);
+                        m_res = PGSQL::PQgetResult(m_conn);
                     }
 
                     if (!_name.empty())
                     {
                         std::ostringstream oss;
                         oss << "DEALLOCATE " << _name << ";";
-                        result res = PQexec(m_conn, oss.str().data());
+                        result res = PGSQL::PQexec(m_conn, oss.str().data());
                         error e;
-                        res.verify_error<PGRES_COMMAND_OK, PGRES_TUPLES_OK>(e);
+                        res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_TUPLES_OK>(e);
                         finish(res);
                         if (e) throw e;
                     }
@@ -2438,7 +2443,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 {
                     while (m_res)
                     {
-                        if (PQisBusy(m_conn))
+                        if (PGSQL::PQisBusy(m_conn))
                         {
                             async_wait([this, handler](const error & e) mutable
                             {
@@ -2447,24 +2452,24 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                         }
                         else
                         {
-                            m_res = PQgetResult(m_conn);
+                            m_res = PGSQL::PQgetResult(m_conn);
                         }
                     }
 
-                    if (!_name.empty() && PQstatus(m_conn) == CONNECTION_OK)
+                    if (!_name.empty() && PGSQL::PQstatus(m_conn) == PGSQL::CONNECTION_OK)
                     {
                         std::ostringstream oss;
                         oss << "DEALLOCATE " << _name << ";";
-                        bool ok = PQsendQuery(m_conn, oss.str().data());
+                        bool ok = PGSQL::PQsendQuery(m_conn, oss.str().data());
                         if (ok)
                         {
                             async_wait([this, handler](postgres::error e) mutable
                             {
-                                if (PQstatus(m_conn) == CONNECTION_OK)
+                                if (PGSQL::PQstatus(m_conn) == PGSQL::CONNECTION_OK)
                                 {
-                                    result res(PQgetResult(m_conn));
+                                    result res(PGSQL::PQgetResult(m_conn));
                                     if (res)
-                                        res.verify_error<PGRES_COMMAND_OK, PGRES_TUPLES_OK>(e);
+                                        res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_TUPLES_OK>(e);
                                     if (!e) _name.clear();
                                     finish(res);
                                     handler(e);
@@ -2494,15 +2499,15 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename ExecuteHandler>
                 void execute(ExecuteHandler&& handler)
                 {
-                    if (PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1) &&
-                            PQsetSingleRowMode(m_conn))
+                    if (PGSQL::PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1) &&
+                            PGSQL::PQsetSingleRowMode(m_conn))
                     {
                         async_wait([this, handler](error e)
                         {
                             if (!e)
                             {
-                                m_res = PQgetResult(m_conn);
-                                m_res.verify_error<PGRES_COMMAND_OK, PGRES_SINGLE_TUPLE>(e);
+                                m_res = PGSQL::PQgetResult(m_conn);
+                                m_res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_SINGLE_TUPLE>(e);
                                 finish(m_res);
                             }
                             handler(e);
@@ -2532,7 +2537,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                             lengths[i] = static_cast<int>(m_binders[i].length());
                             formats[i] = 1;
                         }
-                        if (!PQsendQueryPrepared(m_conn, _name.data(), static_cast<int>(m_binders.size()), values.data(), lengths.data(), formats.data(), 1))
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), static_cast<int>(m_binders.size()), values.data(), lengths.data(), formats.data(), 1))
                         {
                             handler(error(m_conn), 0);
                             return;
@@ -2540,25 +2545,25 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     }
                     else
                     {
-                        if (!PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
                         {
                             handler(error(m_conn), 0);
                             return;
                         }
                     }
-                    if (!PQsetSingleRowMode(m_conn))
+                    if (!PGSQL::PQsetSingleRowMode(m_conn))
                     {
                         handler(error(m_conn), 0);
                         return;
                     }
-                    if (PQisBusy(m_conn))
+                    if (PGSQL::PQisBusy(m_conn))
                     {
                         async_wait([this, handler](error e) mutable
                         {
                             if (!e)
                             {
-                                m_res = PQgetResult(m_conn);
-                                m_res.verify_error<PGRES_COMMAND_OK, PGRES_SINGLE_TUPLE>(e);
+                                m_res = PGSQL::PQgetResult(m_conn);
+                                m_res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_SINGLE_TUPLE>(e);
                                 int64_t affected = m_res.affected_rows();
                                 finish(m_res);
                                 handler(e, affected);
@@ -2576,8 +2581,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 {
                     if (m_res)
                     {
-                        ExecStatusType status = m_res.status();
-                        if (status == PGRES_SINGLE_TUPLE)
+                        PGSQL::ExecStatusType status = m_res.status();
+                        if (status == PGSQL::PGRES_SINGLE_TUPLE)
                         {
                             int count = m_res.get_column_count();
                             if (count > 0)
@@ -2591,7 +2596,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                                 qtl::bind_record(*this, std::forward<Types>(values));
                             }
                             row_handler();
-                            if (PQisBusy(m_conn))
+                            if (PGSQL::PQisBusy(m_conn))
                             {
                                 async_wait([this, &values, row_handler, finish_handler](const error & e)
                                 {
@@ -2601,21 +2606,21 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                                     }
                                     else
                                     {
-                                        m_res = PQgetResult(m_conn);
+                                        m_res = PGSQL::PQgetResult(m_conn);
                                         fetch(std::forward<Types>(values), row_handler, finish_handler);
                                     }
                                 });
                             }
                             else
                             {
-                                m_res = PQgetResult(m_conn);
+                                m_res = PGSQL::PQgetResult(m_conn);
                                 fetch(std::forward<Types>(values), row_handler, finish_handler);
                             }
                         }
                         else
                         {
                             error e;
-                            m_res.verify_error<PGRES_TUPLES_OK>(e);
+                            m_res.verify_error<PGSQL::PGRES_TUPLES_OK>(e);
                             finish_handler(e);
                         }
                     }
@@ -2636,7 +2641,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                         }
                         else
                         {
-                            m_res = PQgetResult(m_conn);
+                            m_res = PGSQL::PQgetResult(m_conn);
                             handler(error());
                         }
                     });
@@ -2691,16 +2696,16 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     }
                     keywords.push_back(nullptr);
                     values.push_back(nullptr);
-                    m_conn = PQconnectStartParams(keywords.data(), values.data(), expand_dbname);
+                    m_conn = PGSQL::PQconnectStartParams(keywords.data(), values.data(), expand_dbname);
                     if (m_conn == nullptr)
                         throw std::bad_alloc();
-                    if (status() == CONNECTION_BAD)
+                    if (status() == PGSQL::CONNECTION_BAD)
                     {
                         handler(error(m_conn));
                         return;
                     }
 
-                    if (PQsetnonblocking(m_conn, true) != 0)
+                    if (PGSQL::PQsetnonblocking(m_conn, true) != 0)
                         handler(error(m_conn));
                     get_options();
                     bind(ev);
@@ -2710,16 +2715,16 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename EventLoop, typename OpenHandler>
                 void open(EventLoop& ev, OpenHandler&& handler, const char* conninfo)
                 {
-                    m_conn = PQconnectStart(conninfo);
+                    m_conn = PGSQL::PQconnectStart(conninfo);
                     if (m_conn == nullptr)
                         throw std::bad_alloc();
-                    if (status() == CONNECTION_BAD)
+                    if (status() == PGSQL::CONNECTION_BAD)
                     {
                         handler(error(m_conn));
                         return;
                     }
 
-                    PQsetnonblocking(m_conn, true);
+                    PGSQL::PQsetnonblocking(m_conn, true);
                     get_options();
                     bind(ev);
                     wait_connect(std::forward<OpenHandler>(handler));
@@ -2728,7 +2733,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename OpenHandler>
                 void reset(OpenHandler&& handler)
                 {
-                    PQresetStart(m_conn);
+                    PGSQL::PQresetStart(m_conn);
                     wait_reset(std::forward<OpenHandler>(handler));
                 }
 
@@ -2739,17 +2744,17 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename ExecuteHandler>
                 void simple_execute(ExecuteHandler&& handler, const char* query_text) NOEXCEPT
                 {
-                    bool ok = PQsendQuery(m_conn, query_text);
+                    bool ok = PGSQL::PQsendQuery(m_conn, query_text);
                     if (ok)
                     {
                         async_wait([this, handler](postgres::error e) mutable
                         {
-                            result res(PQgetResult(m_conn));
-                            res.verify_error<PGRES_COMMAND_OK, PGRES_TUPLES_OK>(e);
+                            result res(PGSQL::PQgetResult(m_conn));
+                            res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_TUPLES_OK>(e);
                             uint64_t affected = res.affected_rows();
                             handler(e, affected);
                             while (res)
-                                res = PQgetResult(m_conn);
+                                res = PGSQL::PQgetResult(m_conn);
                         });
                     }
                     else
@@ -2790,24 +2795,24 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename RowHandler, typename ResultHandler>
                 void simple_query(const char* query, RowHandler&& row_handler, ResultHandler&& result_handler) NOEXCEPT
                 {
-                    bool ok = PQsendQuery(m_conn, query);
+                    bool ok = PGSQL::PQsendQuery(m_conn, query);
                     if (ok)
                     {
                         async_wait([this, row_handler, result_handler](postgres::error e) mutable
                         {
-                            result res(PQgetResult(m_conn));
-                            res.verify_error<PGRES_COMMAND_OK, PGRES_TUPLES_OK>(e);
+                            result res(PGSQL::PQgetResult(m_conn));
+                            res.verify_error<PGSQL::PGRES_COMMAND_OK, PGSQL::PGRES_TUPLES_OK>(e);
                             if (e)
                             {
                                 result_handler(e, 0);
                                 return;
                             }
                             uint64_t affected = res.affected_rows();
-                            while (res && res.status() == PGRES_TUPLES_OK)
+                            while (res && res.status() == PGSQL::PGRES_TUPLES_OK)
                             {
                                 simple_statment stmt(*this, std::move(res));
                                 stmt.fetch_all(row_handler);
-                                res = PQgetResult(m_conn);
+                                res = PGSQL::PQgetResult(m_conn);
                             }
                             result_handler(e, affected);
                         });
@@ -2836,7 +2841,7 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 socket_type socket() const NOEXCEPT
                 {
-                    return PQsocket(m_conn);
+                    return PGSQL::PQsocket(m_conn);
                 }
 
                 int connect_timeout() const
@@ -2862,9 +2867,9 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 void get_options()
                 {
-                    PQconninfoOption* options = PQconninfo(m_conn);
+                    PGSQL::PQconninfoOption* options = PGSQL::PQconninfo(m_conn);
                     m_connect_timeout = 2;
-                    for (PQconninfoOption* option = options; option; option++)
+                    for (PGSQL::PQconninfoOption* option = options; option; option++)
                     {
                         if (strcmp(option->keyword, "connect_timeout") == 0)
                         {
@@ -2873,17 +2878,17 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                             break;
                         }
                     }
-                    PQconninfoFree(options);
+                    PGSQL::PQconninfoFree(options);
                 }
 
                 template<typename OpenHandler>
                 void wait_connect(OpenHandler&& handler) NOEXCEPT
                 {
-                    PostgresPollingStatusType status = PQconnectPoll(m_conn);
+                    PGSQL::PostgresPollingStatusType status = PGSQL::PQconnectPoll(m_conn);
                     switch (status)
                     {
-                        case PGRES_POLLING_READING:
-                        case PGRES_POLLING_WRITING:
+                        case PGSQL::PGRES_POLLING_READING:
+                        case PGSQL::PGRES_POLLING_WRITING:
                             m_event_handler->set_io_handler(event_flags(status), m_connect_timeout,
                                                             [this, handler](int flags) mutable
                             {
@@ -2895,10 +2900,10 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                                     wait_connect(std::forward<OpenHandler>(handler));
                             });
                             break;
-                        case PGRES_POLLING_FAILED:
+                        case PGSQL::PGRES_POLLING_FAILED:
                             handler(postgres::error(handle()));
                             break;
-                        case PGRES_POLLING_OK:
+                        case PGSQL::PGRES_POLLING_OK:
                             //PQsetnonblocking(m_conn, true);
                             handler(postgres::error());
                     }
@@ -2907,11 +2912,11 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                 template<typename OpenHandler>
                 void wait_reset(OpenHandler&& handler) NOEXCEPT
                 {
-                    PostgresPollingStatusType status = PQresetPoll(m_conn);
+                    PGSQL::PostgresPollingStatusType status = PGSQL::PQresetPoll(m_conn);
                     switch (status)
                     {
-                        case PGRES_POLLING_READING:
-                        case PGRES_POLLING_WRITING:
+                        case PGSQL::PGRES_POLLING_READING:
+                        case PGSQL::PGRES_POLLING_WRITING:
                             m_event_handler->set_io_handler(event_flags(status), m_connect_timeout,
                                                             [this, handler](int flags) mutable
                             {
@@ -2923,10 +2928,10 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                                     wait_reset(std::forward<OpenHandler>(handler));
                             });
                             break;
-                        case PGRES_POLLING_FAILED:
+                        case PGSQL::PGRES_POLLING_FAILED:
                             handler(postgres::error(m_conn));
                             break;
-                        case PGRES_POLLING_OK:
+                        case PGSQL::PGRES_POLLING_OK:
                             handler(postgres::error());
                     }
                 }
