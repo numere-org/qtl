@@ -1642,7 +1642,12 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                     m_res = nullptr;
                 }
 
-                uint64_t affetced_rows() const
+                void resize_binders(size_t nBinders)
+                {
+                    m_binders.resize(nBinders);
+                }
+
+                uint64_t affected_rows() const
                 {
                     return m_res.affected_rows();
                 }
@@ -1921,8 +1926,29 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
 
                 void execute()
                 {
-                    if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
-                        throw error(m_conn);
+                    if (m_binders.size())
+                    {
+                        std::vector<const char*> values(m_binders.size());
+                        std::vector<int> lengths(m_binders.size());
+                        std::vector<int> formats(m_binders.size());
+
+                        for (size_t i = 0; i < m_binders.size(); i++)
+                        {
+                            values[i] = m_binders[i].value();
+                            lengths[i] = static_cast<int>(m_binders[i].length());
+                            formats[i] = 1;
+                        }
+
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(),
+                                                        (int)m_binders.size(), values.data(), lengths.data(), formats.data(), 1))
+                            throw error(m_conn);
+                    }
+                    else
+                    {
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), 0, nullptr, nullptr, nullptr, 1))
+                            throw error(m_conn);
+                    }
+
                     if (!PGSQL::PQsetSingleRowMode(m_conn))
                         throw error(m_conn);
                     m_res = PGSQL::PQgetResult(m_conn);
@@ -1947,7 +1973,8 @@ template<typename T, size_t N> struct object_traits<T (&)[N]> : public carray_tr
                             lengths[i] = static_cast<int>(m_binders[i].length());
                             formats[i] = 1;
                         }
-                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(), static_cast<int>(m_binders.size()), values.data(), lengths.data(), formats.data(), 1))
+                        if (!PGSQL::PQsendQueryPrepared(m_conn, _name.data(),
+                                                        (int)m_binders.size(), values.data(), lengths.data(), formats.data(), 1))
                             throw error(m_conn);
                     }
                     else
